@@ -1,11 +1,54 @@
 # KernAuth Go example
 
-Protocol example for Go 1.23+. Standard library only. Paste the public app ID, key ID, and public key from the Developers page.
+Protocol example for Go 1.23+. Standard library only. This is not the official SDK. The official client is the C++ SDK. This file calls the same activate, validate, and deactivate routes and checks the Ed25519 signature.
+
+## Add it
+
+Paste the public app ID, key ID, and public key from Developers over the placeholders in `go.go`.
 
 ```
 go test go.go go_test.go
 ```
 
-A patched program can still skip the check.
+Run with `KERN_LICENSE_KEY` and `KERN_INSTALLATION_ID` set. Persist one installation ID per device.
+
+## Instance
+
+```go
+app := Client{
+  API:       "https://api.kernauth.com",
+  AppID:     "__PUBLIC_APP_ID__",
+  KeyID:     "__KEY_ID__",
+  PublicKey: "__PUBLIC_KEY__",
+}
+```
+
+## Activate
+
+```go
+if !app.Activate(licenseKey, installationID) {
+  panic(app.Message)
+}
+```
+
+## Validate
+
+```go
+if !app.Validate(licenseKey, installationID) {
+  panic(app.Message)
+}
+```
+
+## Deactivate
+
+```go
+if !app.Deactivate(licenseKey, installationID) {
+  panic(app.Message)
+}
+```
+
+`app.Message` is `Device deactivated` after a successful deactivate.
+
+A patched program can still skip the check. These examples do not add anti-debug or anti-VM code.
 
 Documentation: https://kernauth.apidog.io

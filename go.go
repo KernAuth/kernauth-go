@@ -83,24 +83,59 @@ func verifyGrant(g grant, nonce, expectedApp, expectedKey, pinnedKey string, now
   return err == nil && ed25519.Verify(pk, message, sig)
 }
 
-func request(mode, licenseKey, installationID string) error {
+// Client is one application. Paste the public values from Developers.
+type Client struct {
+  API       string
+  AppID     string
+  KeyID     string
+  PublicKey string
+  Success   bool
+  Message   string
+}
+
+func (c *Client) Activate(licenseKey, installationID string) bool {
+  return c.call("activate", licenseKey, installationID, "License is active")
+}
+
+func (c *Client) Validate(licenseKey, installationID string) bool {
+  return c.call("validate", licenseKey, installationID, "License is active")
+}
+
+func (c *Client) Deactivate(licenseKey, installationID string) bool {
+  return c.call("deactivate", licenseKey, installationID, "Device deactivated")
+}
+
+func (c *Client) call(mode, licenseKey, installationID, okMessage string) bool {
+  if err := c.post(mode, licenseKey, installationID); err != nil {
+    c.Success = false
+    c.Message = err.Error()
+    return false
+  }
+  c.Success = true
+  c.Message = okMessage
+  return true
+}
+
+func (c *Client) post(mode, licenseKey, installationID string) error {
   nonceBytes := make([]byte, 24)
   if _, err := rand.Read(nonceBytes); err != nil { return err }
   nonce := base64.RawURLEncoding.EncodeToString(nonceBytes)
   fingerprint := sha256.Sum256([]byte("kernauth-device-v1:" + installationID))
-  body, _ := json.Marshal(map[string]any{"protocol_version": 1, "public_app_id": appID,
+  body, _ := json.Marshal(map[string]any{"protocol_version": 1, "public_app_id": c.AppID,
     "client_version": "1.0.0", "license_key": licenseKey, "fingerprint_version": 1,
     "device_fingerprint": hex.EncodeToString(fingerprint[:]), "installation_id": installationID, "nonce": nonce})
   client := &http.Client{Timeout: 10 * time.Second}
-  response, err := client.Post(api + "/v1/client/" + mode, "application/json", bytes.NewReader(body))
-  if err != nil { return err }; defer response.Body.Close()
+  response, err := client.Post(c.API+"/v1/client/"+mode, "application/json", bytes.NewReader(body))
+  if err != nil { return err }
+  defer response.Body.Close()
   if response.StatusCode != 200 { return fmt.Errorf("%s failed: %d", mode, response.StatusCode) }
-  raw, err := io.ReadAll(io.LimitReader(response.Body, 64*1024)); if err != nil { return err }
+  raw, err := io.ReadAll(io.LimitReader(response.Body, 64*1024))
+  if err != nil { return err }
   var result grant
   if err := json.Unmarshal(raw, &result); err != nil { return err }
   if mode == "deactivate" {
     if !result.Deactivated { return errors.New("deactivation not confirmed") }
-  } else if !verifyGrant(result, nonce, appID, keyID, publicKey, time.Now()) {
+  } else if !verifyGrant(result, nonce, c.AppID, c.KeyID, c.PublicKey, time.Now()) {
     return errors.New("invalid or expired signed entitlement")
   }
   return nil
@@ -109,8 +144,9 @@ func request(mode, licenseKey, installationID string) error {
 func main() {
   licenseKey, installationID := os.Getenv("KERN_LICENSE_KEY"), os.Getenv("KERN_INSTALLATION_ID")
   if licenseKey == "" || installationID == "" { panic("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID") }
-  for _, mode := range []string{"activate", "validate", "deactivate"} {
-    if err := request(mode, licenseKey, installationID); err != nil { panic(err) }
+  app := Client{API: api, AppID: appID, KeyID: keyID, PublicKey: publicKey}
+  if !app.Activate(licenseKey, installationID) || !app.Validate(licenseKey, installationID) || !app.Deactivate(licenseKey, installationID) {
+    panic(app.Message)
   }
-  fmt.Println("Signed entitlement verified and device deactivated")
+  fmt.Println(app.Message)
 }
