@@ -1,6 +1,6 @@
 # KernAuth Go example
 
-Protocol example for Go 1.23+. Standard library only. This is not the official SDK. The official client is the C++ SDK. This file calls the same activate, validate, and deactivate routes and checks the Ed25519 signature.
+Protocol example for Go 1.23+. Standard library only. This is not the official SDK. The official client is the C++ SDK. This file calls validate and checks the Ed25519 signature.
 
 ## Add it
 
@@ -23,14 +23,6 @@ app := Client{
 }
 ```
 
-## Activate
-
-```go
-if !app.Activate(licenseKey, installationID) {
-  panic(app.Message)
-}
-```
-
 ## Validate
 
 ```go
@@ -38,16 +30,6 @@ if !app.Validate(licenseKey, installationID) {
   panic(app.Message)
 }
 ```
-
-## Deactivate
-
-```go
-if !app.Deactivate(licenseKey, installationID) {
-  panic(app.Message)
-}
-```
-
-`app.Message` is `Device deactivated` after a successful deactivate.
 
 A patched program can still skip the check. These examples do not add anti-debug or anti-VM code.
 

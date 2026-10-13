@@ -26,7 +26,7 @@ func main() {
   licenseKey, installationID := os.Getenv("KERN_LICENSE_KEY"), os.Getenv("KERN_INSTALLATION_ID")
   if licenseKey == "" || installationID == "" { panic("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID") }
   app := Client{API: api, AppID: appID, KeyID: keyID, PublicKey: publicKey}
-  if !app.Activate(licenseKey, installationID) || !app.Validate(licenseKey, installationID) || !app.Deactivate(licenseKey, installationID) {
+  if !app.Validate(licenseKey, installationID) {
     panic(app.Message)
   }
   fmt.Println(app.Message)
@@ -38,7 +38,6 @@ var fields = []string{"protocol_version", "entitlement_id", "application_id", "l
 type grant struct {
   Entitlement map[string]json.RawMessage `json:"entitlement"`
   Signature string `json:"signature"`
-  Deactivated bool `json:"deactivated"`
 }
 
 func field(ent map[string]json.RawMessage, name string) (string, error) {
@@ -101,16 +100,8 @@ type Client struct {
   Message   string
 }
 
-func (c *Client) Activate(licenseKey, installationID string) bool {
-  return c.call("activate", licenseKey, installationID, "License is active")
-}
-
 func (c *Client) Validate(licenseKey, installationID string) bool {
   return c.call("validate", licenseKey, installationID, "License is active")
-}
-
-func (c *Client) Deactivate(licenseKey, installationID string) bool {
-  return c.call("deactivate", licenseKey, installationID, "Device deactivated")
 }
 
 func (c *Client) call(mode, licenseKey, installationID, okMessage string) bool {
@@ -141,9 +132,7 @@ func (c *Client) post(mode, licenseKey, installationID string) error {
   if err != nil { return err }
   var result grant
   if err := json.Unmarshal(raw, &result); err != nil { return err }
-  if mode == "deactivate" {
-    if !result.Deactivated { return errors.New("deactivation not confirmed") }
-  } else if !verifyGrant(result, nonce, c.AppID, c.KeyID, c.PublicKey, time.Now()) {
+  if !verifyGrant(result, nonce, c.AppID, c.KeyID, c.PublicKey, time.Now()) {
     return errors.New("invalid or expired signed entitlement")
   }
   return nil
