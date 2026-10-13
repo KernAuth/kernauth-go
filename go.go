@@ -1,4 +1,3 @@
-// KernAuth protocol example. Run: KERN_LICENSE_KEY=... KERN_INSTALLATION_ID=... go run go.go
 package main
 
 import (
@@ -22,6 +21,16 @@ const api = "https://api.kernauth.com"
 const appID = "__PUBLIC_APP_ID__"
 const keyID = "__KEY_ID__"
 const publicKey = "__PUBLIC_KEY__"
+
+func main() {
+  licenseKey, installationID := os.Getenv("KERN_LICENSE_KEY"), os.Getenv("KERN_INSTALLATION_ID")
+  if licenseKey == "" || installationID == "" { panic("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID") }
+  app := Client{API: api, AppID: appID, KeyID: keyID, PublicKey: publicKey}
+  if !app.Activate(licenseKey, installationID) || !app.Validate(licenseKey, installationID) || !app.Deactivate(licenseKey, installationID) {
+    panic(app.Message)
+  }
+  fmt.Println(app.Message)
+}
 
 var fields = []string{"protocol_version", "entitlement_id", "application_id", "license_id", "status",
   "features", "device_id", "issued_at", "expires_at", "server_time", "nonce", "key_id"}
@@ -83,7 +92,6 @@ func verifyGrant(g grant, nonce, expectedApp, expectedKey, pinnedKey string, now
   return err == nil && ed25519.Verify(pk, message, sig)
 }
 
-// Client is one application. Paste the public values from Developers.
 type Client struct {
   API       string
   AppID     string
@@ -139,14 +147,4 @@ func (c *Client) post(mode, licenseKey, installationID string) error {
     return errors.New("invalid or expired signed entitlement")
   }
   return nil
-}
-
-func main() {
-  licenseKey, installationID := os.Getenv("KERN_LICENSE_KEY"), os.Getenv("KERN_INSTALLATION_ID")
-  if licenseKey == "" || installationID == "" { panic("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID") }
-  app := Client{API: api, AppID: appID, KeyID: keyID, PublicKey: publicKey}
-  if !app.Activate(licenseKey, installationID) || !app.Validate(licenseKey, installationID) || !app.Deactivate(licenseKey, installationID) {
-    panic(app.Message)
-  }
-  fmt.Println(app.Message)
 }
