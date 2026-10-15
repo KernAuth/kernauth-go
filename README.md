@@ -1,16 +1,6 @@
 # KernAuth Go example
 
-Example for Go 1.23 or newer. Standard library only. This file calls validate and checks the Ed25519 signature.
-
-## Add it
-
-Paste the public app ID, key ID, and public key from Developers over the placeholders in `go.go`.
-
-```
-go test go.go go_test.go
-```
-
-Run with `KERN_LICENSE_KEY` and `KERN_INSTALLATION_ID` set. Persist one installation ID per device.
+Paste the public app ID, key ID, and public key from Developers into `go.go`. Go 1.23 or newer. Standard library only.
 
 ## Instance
 
@@ -29,8 +19,21 @@ app := Client{
 if !app.Validate(licenseKey, installationID) {
   panic(app.Message)
 }
+fmt.Printf("Status: %s\n", app.Status)
+fmt.Printf("Features: %s\n", app.Features)
+fmt.Printf("License: %s\n", app.LicenseID)
+fmt.Printf("Check expires: %s\n", app.ExpiresAt)
 ```
 
-A patched program can still skip the check. These examples do not add anti-debug or anti-VM code.
+A good check prints the status, the feature flags stored on the license, the license id, and when this check expires. Type the license key at the prompt. `KERN_LICENSE_KEY` skips the prompt. The program saves an installation id in `kernauth-install` and reuses it. `KERN_INSTALLATION_ID` overrides that file.
+
+## Run
+
+```
+go test go.go go_test.go
+go run go.go
+```
+
+A modified program can still skip the check.
 
 Documentation: https://kernauth.apidog.io

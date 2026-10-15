@@ -1,6 +1,7 @@
 package main
 
 import (
+  "bufio"
   "bytes"
   "crypto/ed25519"
   "crypto/rand"
@@ -22,14 +23,43 @@ const appID = "__PUBLIC_APP_ID__"
 const keyID = "__KEY_ID__"
 const publicKey = "__PUBLIC_KEY__"
 
+func licenseKey() string {
+  if value := strings.TrimSpace(os.Getenv("KERN_LICENSE_KEY")); value != "" {
+    return value
+  }
+  if info, err := os.Stdin.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
+    fmt.Fprint(os.Stdout, "Enter license: ")
+  }
+  line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+  return strings.TrimSpace(line)
+}
+
+func installationID() string {
+  if value := strings.TrimSpace(os.Getenv("KERN_INSTALLATION_ID")); value != "" {
+    return value
+  }
+  if raw, err := os.ReadFile("kernauth-install"); err == nil {
+    if saved := strings.TrimSpace(string(raw)); saved != "" {
+      return saved
+    }
+  }
+  buf := make([]byte, 16)
+  if _, err := rand.Read(buf); err != nil {
+    panic(err)
+  }
+  saved := hex.EncodeToString(buf)
+  if err := os.WriteFile("kernauth-install", []byte(saved+"\n"), 0o600); err != nil {
+    panic(err)
+  }
+  return saved
+}
+
 func main() {
-  licenseKey, installationID := os.Getenv("KERN_LICENSE_KEY"), os.Getenv("KERN_INSTALLATION_ID")
-  if licenseKey == "" || installationID == "" { panic("Set KERN_LICENSE_KEY and KERN_INSTALLATION_ID") }
   app := Client{API: api, AppID: appID, KeyID: keyID, PublicKey: publicKey}
-  if !app.Validate(licenseKey, installationID) {
+  if !app.Validate(licenseKey(), installationID()) {
     panic(app.Message)
   }
-  fmt.Println(app.Message)
+  fmt.Printf("Status: %s\nFeatures: %s\nLicense: %s\nCheck expires: %s\n", app.Status, app.Features, app.LicenseID, app.ExpiresAt)
 }
 
 var fields = []string{"protocol_version", "entitlement_id", "application_id", "license_id", "status",
@@ -98,6 +128,10 @@ type Client struct {
   PublicKey string
   Success   bool
   Message   string
+  Status    string
+  Features  string
+  LicenseID string
+  ExpiresAt string
 }
 
 func (c *Client) Validate(licenseKey, installationID string) bool {
@@ -135,5 +169,14 @@ func (c *Client) post(mode, licenseKey, installationID string) error {
   if !verifyGrant(result, nonce, c.AppID, c.KeyID, c.PublicKey, time.Now()) {
     return errors.New("invalid or expired signed entitlement")
   }
+  status, err := field(result.Entitlement, "status")
+  if err != nil { return err }
+  features, err := field(result.Entitlement, "features")
+  if err != nil { return err }
+  licenseID, err := field(result.Entitlement, "license_id")
+  if err != nil { return err }
+  expires, err := field(result.Entitlement, "expires_at")
+  if err != nil { return err }
+  c.Status, c.Features, c.LicenseID, c.ExpiresAt = status, features, licenseID, expires
   return nil
 }
