@@ -1,6 +1,6 @@
 # KernAuth Go example
 
-Protocol example for Go 1.23+. Standard library only. This is not the official SDK. The official client is the C++ SDK. This file calls validate and checks the Ed25519 signature.
+Example for Go 1.23 or newer. Standard library only. This file calls validate and checks the Ed25519 signature.
 
 ## Add it
 
