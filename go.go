@@ -23,7 +23,6 @@ import (
 
 const api = "https://api.kernauth.com"
 const appID = "__PUBLIC_APP_ID__"
-const keyID = "__KEY_ID__"
 const publicKey = "__PUBLIC_KEY__"
 
 func licenseKey() string {
@@ -76,7 +75,7 @@ func machineHWID() string {
 }
 
 func main() {
-  app := Client{API: api, AppID: appID, KeyID: keyID, PublicKey: publicKey}
+  app := Client{API: api, AppID: appID, PublicKey: publicKey}
   if !app.Validate(licenseKey(), installationID()) {
     panic(app.Message)
   }
@@ -123,16 +122,15 @@ func canonical(ent map[string]json.RawMessage) ([]byte, error) {
   return []byte(output.String()), nil
 }
 
-func verifyGrant(g grant, nonce, expectedApp, expectedKey, pinnedKey string, now time.Time) bool {
+func verifyGrant(g grant, nonce, expectedApp, pinnedKey string, now time.Time) bool {
   ent := g.Entitlement
   app, e1 := field(ent, "application_id")
-  key, e2 := field(ent, "key_id")
   echo, e3 := field(ent, "nonce")
   status, e4 := field(ent, "status")
   version, e5 := field(ent, "protocol_version")
   expiry, e6 := field(ent, "expires_at")
-  if e1 != nil || e2 != nil || e3 != nil || e4 != nil || e5 != nil || e6 != nil ||
-      app != expectedApp || key != expectedKey || echo != nonce || status != "active" || version != "1" { return false }
+  if e1 != nil || e3 != nil || e4 != nil || e5 != nil || e6 != nil ||
+      app != expectedApp || echo != nonce || status != "active" || version != "1" { return false }
   deadline, err := time.Parse(time.RFC3339Nano, expiry)
   if err != nil || !deadline.After(now) { return false }
   message, err := canonical(ent); if err != nil { return false }
@@ -145,7 +143,6 @@ func verifyGrant(g grant, nonce, expectedApp, expectedKey, pinnedKey string, now
 type Client struct {
   API       string
   AppID     string
-  KeyID     string
   PublicKey string
   Success   bool
   Message   string
@@ -187,7 +184,7 @@ func (c *Client) post(mode, licenseKey, installationID string) error {
   if err != nil { return err }
   var result grant
   if err := json.Unmarshal(raw, &result); err != nil { return err }
-  if !verifyGrant(result, nonce, c.AppID, c.KeyID, c.PublicKey, time.Now()) {
+  if !verifyGrant(result, nonce, c.AppID, c.PublicKey, time.Now()) {
     return errors.New("invalid or expired signed entitlement")
   }
   status, err := field(result.Entitlement, "status")

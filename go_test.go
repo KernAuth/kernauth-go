@@ -26,18 +26,16 @@ func TestWorkerVectors(t *testing.T) {
       g := grant{Entitlement: vector.Fields, Signature: vector.Signature}
       nonce, _ := field(vector.Fields, "nonce")
       app, _ := field(vector.Fields, "application_id")
-      key, _ := field(vector.Fields, "key_id")
-      if !verifyGrant(g, nonce, app, key, vector.PublicKey, now) { t.Fatal("valid signature rejected") }
-      if verifyGrant(g, "wrong", app, key, vector.PublicKey, now) { t.Fatal("wrong nonce accepted") }
-      if verifyGrant(g, nonce, "pub_other_app", key, vector.PublicKey, now) { t.Fatal("wrong app accepted") }
-      if verifyGrant(g, nonce, app, "wrong-key", vector.PublicKey, now) { t.Fatal("wrong key id accepted") }
+      if !verifyGrant(g, nonce, app, vector.PublicKey, now) { t.Fatal("valid signature rejected") }
+      if verifyGrant(g, "wrong", app, vector.PublicKey, now) { t.Fatal("wrong nonce accepted") }
+      if verifyGrant(g, nonce, "pub_other_app", vector.PublicKey, now) { t.Fatal("wrong app accepted") }
       badSig := grant{Entitlement: vector.Fields, Signature: vector.Signature + "AA"}
-      if verifyGrant(badSig, nonce, app, key, vector.PublicKey, now) { t.Fatal("bad signature accepted") }
-      if verifyGrant(g, nonce, app, key, vector.PublicKey, now.Add(20*time.Minute)) { t.Fatal("expiry accepted") }
+      if verifyGrant(badSig, nonce, app, vector.PublicKey, now) { t.Fatal("bad signature accepted") }
+      if verifyGrant(g, nonce, app, vector.PublicKey, now.Add(20*time.Minute)) { t.Fatal("expiry accepted") }
       g.Entitlement = make(map[string]json.RawMessage)
       for k, v := range vector.Fields { g.Entitlement[k] = v }
       g.Entitlement["device_id"] = json.RawMessage(`"tampered"`)
-      if verifyGrant(g, nonce, app, key, vector.PublicKey, now) { t.Fatal("tampering accepted") }
+      if verifyGrant(g, nonce, app, vector.PublicKey, now) { t.Fatal("tampering accepted") }
     })
   }
 }

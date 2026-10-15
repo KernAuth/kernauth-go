@@ -1,6 +1,6 @@
 # KernAuth Go example
 
-Paste the public app ID, key ID, and public key from Developers into `go.go`. Go 1.23 or newer. Standard library only.
+Paste the public app ID and public key from Developers into `go.go`. Go 1.23 or newer. Standard library only.
 
 ## Instance
 
@@ -8,7 +8,6 @@ Paste the public app ID, key ID, and public key from Developers into `go.go`. Go
 app := Client{
   API:       "https://api.kernauth.com",
   AppID:     "__PUBLIC_APP_ID__",
-  KeyID:     "__KEY_ID__",
   PublicKey: "__PUBLIC_KEY__",
 }
 ```
