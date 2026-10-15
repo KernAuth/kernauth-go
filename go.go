@@ -14,6 +14,9 @@ import (
   "io"
   "net/http"
   "os"
+  "os/exec"
+  "regexp"
+  "runtime"
   "strings"
   "time"
 )
@@ -38,20 +41,38 @@ func installationID() string {
   if value := strings.TrimSpace(os.Getenv("KERN_INSTALLATION_ID")); value != "" {
     return value
   }
-  if raw, err := os.ReadFile("kernauth-install"); err == nil {
-    if saved := strings.TrimSpace(string(raw)); saved != "" {
-      return saved
+  hwid := strings.TrimSpace(machineHWID())
+  if regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`).MatchString(hwid) {
+    return hwid
+  }
+  panic("Could not read the HWID")
+}
+
+func machineHWID() string {
+  switch runtime.GOOS {
+  case "windows":
+    out, err := exec.Command("powershell.exe", "-NoProfile", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value").Output()
+    if err != nil {
+      return ""
     }
+    return string(out)
+  case "darwin":
+    out, err := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
+    if err != nil {
+      return ""
+    }
+    match := regexp.MustCompile(`"IOPlatformUUID" = "([^"]+)"`).FindSubmatch(out)
+    if match == nil {
+      return ""
+    }
+    return string(match[1])
+  default:
+    raw, err := os.ReadFile("/etc/machine-id")
+    if err != nil {
+      return ""
+    }
+    return string(raw)
   }
-  buf := make([]byte, 16)
-  if _, err := rand.Read(buf); err != nil {
-    panic(err)
-  }
-  saved := hex.EncodeToString(buf)
-  if err := os.WriteFile("kernauth-install", []byte(saved+"\n"), 0o600); err != nil {
-    panic(err)
-  }
-  return saved
 }
 
 func main() {
