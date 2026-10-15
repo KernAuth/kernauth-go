@@ -76,10 +76,19 @@ func machineHWID() string {
 
 func main() {
   app := Client{API: api, AppID: appID, PublicKey: publicKey}
-  if !app.Validate(licenseKey(), installationID()) {
+  key := licenseKey()
+  hwid := installationID()
+  if !app.Validate(key, hwid) {
     panic(app.Message)
   }
   fmt.Printf("Status: %s\nFeatures: %s\nLicense: %s\nCheck expires: %s\n", app.Status, app.Features, app.LicenseID, app.ExpiresAt)
+  for {
+    time.Sleep(60 * time.Second)
+    if err := app.heartbeat(key, hwid); err != nil {
+      fmt.Println(err)
+      os.Exit(1)
+    }
+  }
 }
 
 var fields = []string{"protocol_version", "entitlement_id", "application_id", "license_id", "status",
@@ -167,6 +176,44 @@ func (c *Client) call(mode, licenseKey, installationID, okMessage string) bool {
   return true
 }
 
+func apiMessage(raw []byte, fallback string) string {
+  var failure struct {
+    Error struct {
+      Message string `json:"message"`
+    } `json:"error"`
+  }
+  if json.Unmarshal(raw, &failure) == nil && failure.Error.Message != "" {
+    return failure.Error.Message
+  }
+  return fallback
+}
+
+func (c *Client) heartbeat(licenseKey, installationID string) error {
+  nonceBytes := make([]byte, 24)
+  if _, err := rand.Read(nonceBytes); err != nil { return err }
+  fingerprint := sha256.Sum256([]byte("kernauth-device-v1:" + installationID))
+  body, _ := json.Marshal(map[string]any{"protocol_version": 1, "public_app_id": c.AppID,
+    "client_version": "1.0.0", "license_key": licenseKey, "fingerprint_version": 1,
+    "device_fingerprint": hex.EncodeToString(fingerprint[:]), "installation_id": installationID,
+    "nonce": base64.RawURLEncoding.EncodeToString(nonceBytes)})
+  client := &http.Client{Timeout: 10 * time.Second}
+  response, err := client.Post(c.API+"/v1/client/heartbeat", "application/json", bytes.NewReader(body))
+  if err != nil { return err }
+  defer response.Body.Close()
+  raw, err := io.ReadAll(io.LimitReader(response.Body, 64*1024))
+  if err != nil { return err }
+  if response.StatusCode != 200 {
+    return errors.New(apiMessage(raw, fmt.Sprintf("heartbeat failed: %d", response.StatusCode)))
+  }
+  var payload struct {
+    OK bool `json:"ok"`
+  }
+  if json.Unmarshal(raw, &payload) != nil || !payload.OK {
+    return errors.New("heartbeat failed")
+  }
+  return nil
+}
+
 func (c *Client) post(mode, licenseKey, installationID string) error {
   nonceBytes := make([]byte, 24)
   if _, err := rand.Read(nonceBytes); err != nil { return err }
@@ -179,7 +226,10 @@ func (c *Client) post(mode, licenseKey, installationID string) error {
   response, err := client.Post(c.API+"/v1/client/"+mode, "application/json", bytes.NewReader(body))
   if err != nil { return err }
   defer response.Body.Close()
-  if response.StatusCode != 200 { return fmt.Errorf("%s failed: %d", mode, response.StatusCode) }
+  if response.StatusCode != 200 {
+    raw, _ := io.ReadAll(io.LimitReader(response.Body, 64*1024))
+    return errors.New(apiMessage(raw, fmt.Sprintf("%s failed: %d", mode, response.StatusCode)))
+  }
   raw, err := io.ReadAll(io.LimitReader(response.Body, 64*1024))
   if err != nil { return err }
   var result grant
